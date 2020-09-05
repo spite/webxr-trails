@@ -99,7 +99,7 @@ const palette = [
   "#BD3E30",
 ];
 
-const group = new TrailGroup(1, POINTS);
+const group = new TrailGroup(50, POINTS);
 
 for (let trail of trails) {
   const ptr = ~~(Math.random() * palette.length);

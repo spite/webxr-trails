@@ -10,6 +10,7 @@ import {
   PlaneBufferGeometry,
   MeshStandardMaterial,
 } from "../third_party/three.module.js";
+import Maf from "../third_party/Maf.js";
 
 const trails = [];
 
@@ -33,7 +34,10 @@ class Point {
 class Trail {
   constructor(numPoints) {
     this.numPoints = numPoints;
-    this.spring = 0.4 + Math.random() * 0.2;
+    this.spring = Maf.randomInRange(0.4, 0.5); //  0.45
+    this.dampening = Maf.randomInRange(0.2, 0.25); // .25
+    this.friction = Maf.randomInRange(0.45, 0.5); // .5
+    this.tension = Maf.randomInRange(0.98, 0.99); // 0.98;
     this.points = [];
     this.initialised = false;
     this.vertices = new Float32Array(this.numPoints * 3);
@@ -82,11 +86,24 @@ class Trail {
 
   step() {
     let spring = this.spring;
+    const dampening = this.dampening;
+    const friction = this.friction;
+    const tension = this.tension;
+
     for (let j = 1; j < this.points.length; j++) {
-      spring *= 0.99; //this.spring; // (this.spring * (this.points.length - j)) / this.points.length;
       const prev = this.points[j - 1];
       const cur = this.points[j];
-      cur.step(prev.position, spring);
+
+      cur.velocity.x += (prev.position.x - cur.position.x) * spring;
+      cur.velocity.y += (prev.position.y - cur.position.y) * spring;
+      cur.velocity.z += (prev.position.z - cur.position.z) * spring;
+      cur.velocity.x += prev.velocity.x * dampening;
+      cur.velocity.y += prev.velocity.y * dampening;
+      cur.velocity.z += prev.velocity.z * dampening;
+      cur.velocity.multiplyScalar(friction);
+      cur.position.add(cur.velocity);
+      spring *= tension;
+
       const prevNormal = this.points[j - 1].normal;
       const normal = this.points[j].normal;
       normal.lerp(prevNormal, 0.1);
@@ -103,19 +120,19 @@ class Trail {
     this.geometry.attributes.position.needsUpdate = true;
 
     const vertices = this.ribbonGeometry.attributes.position.array;
-    const w = 0.1;
+    const w = 0.02;
     const n = new Vector3();
     const t = new Vector3();
     for (let j = 0; j < this.points.length; j++) {
       const p = this.points[j].position;
       n.copy(this.points[j].normal);
-      n.multiplyScalar(w);
-      vertices[j * 3] = p.x + n.x;
-      vertices[j * 3 + 1] = p.y + n.y;
-      vertices[j * 3 + 2] = p.z + n.z;
-      vertices[(j + this.points.length) * 3 + 0] = p.x - n.x;
-      vertices[(j + this.points.length) * 3 + 1] = p.y - n.y;
-      vertices[(j + this.points.length) * 3 + 2] = p.z - n.z;
+      n.normalize();
+      vertices[j * 3] = p.x - 0.01 * n.x;
+      vertices[j * 3 + 1] = p.y - 0.01 * n.y;
+      vertices[j * 3 + 2] = p.z - 0.01 * n.z;
+      vertices[(j + this.points.length) * 3 + 0] = p.x - (0.01 + w) * n.x;
+      vertices[(j + this.points.length) * 3 + 1] = p.y - (0.01 + w) * n.y;
+      vertices[(j + this.points.length) * 3 + 2] = p.z - (0.01 + w) * n.z;
     }
     this.ribbonGeometry.attributes.position.needsUpdate = true;
     this.ribbonGeometry.computeVertexNormals();
