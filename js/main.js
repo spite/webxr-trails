@@ -100,6 +100,7 @@ const palette = [
 ];
 
 const group = new TrailGroup(50, POINTS);
+const up = new Vector3(0, 1, 0);
 
 for (let trail of trails) {
   const ptr = ~~(Math.random() * palette.length);
@@ -175,6 +176,7 @@ async function render() {
   //   trail.update(new Vector3(x, y, z).multiplyScalar(0.1));
   // }
 
+  const dir = new Vector3();
   for (let j = 0; j < fingers.length; j++) {
     const pos = hand1.joints[fingers[j]].position;
     const pos2 = hand2.joints[fingers[j]].position;
@@ -184,7 +186,19 @@ async function render() {
     const n2 = pos2.clone().sub(nextJoinPos2).normalize();
 
     for (let i = 0; i < trailsPerFinger; i++) {
+      const pts = trails[j + i * 10].points;
+      // if (pts.length) {
+      //   dir.copy(pts[0].position).sub(pts[1].position).normalize();
+      //   n.crossVectors(dir, up).normalize();
+      //   n.cross(dir);
+      // }
       trails[j + i * 10].update(pos, n);
+      // const pts2 = trails[j + 5 + i * 10].points;
+      // if (pts2.length) {
+      //   dir.copy(pts2[0].position).sub(pts2[1].position).normalize();
+      //   n2.crossVectors(dir, up).normalize();
+      //   n2.cross(dir);
+      // }
       trails[j + 5 + i * 10].update(pos2, n2);
     }
   }

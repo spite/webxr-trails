@@ -38,6 +38,7 @@ class Trail {
     this.dampening = Maf.randomInRange(0.2, 0.25); // .25
     this.friction = Maf.randomInRange(0.45, 0.5); // .5
     this.tension = Maf.randomInRange(0.98, 0.99); // 0.98;
+
     this.points = [];
     this.initialised = false;
     this.vertices = new Float32Array(this.numPoints * 3);
@@ -94,6 +95,10 @@ class Trail {
       const prev = this.points[j - 1];
       const cur = this.points[j];
 
+      const prevNormal = this.points[j - 1].normal;
+      const normal = this.points[j].normal;
+      normal.lerp(prevNormal, dampening);
+
       cur.velocity.x += (prev.position.x - cur.position.x) * spring;
       cur.velocity.y += (prev.position.y - cur.position.y) * spring;
       cur.velocity.z += (prev.position.z - cur.position.z) * spring;
@@ -101,12 +106,12 @@ class Trail {
       cur.velocity.y += prev.velocity.y * dampening;
       cur.velocity.z += prev.velocity.z * dampening;
       cur.velocity.multiplyScalar(friction);
+      //   cur.velocity.x += 0.001 * normal.x;
+      //   cur.velocity.y += 0.001 * normal.y;
+      //   cur.velocity.z += 0.001 * normal.z;
+
       cur.position.add(cur.velocity);
       spring *= tension;
-
-      const prevNormal = this.points[j - 1].normal;
-      const normal = this.points[j].normal;
-      normal.lerp(prevNormal, 0.1);
     }
   }
 
