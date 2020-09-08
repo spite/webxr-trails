@@ -10,6 +10,8 @@ import {
   Vector3,
   Color,
   Raycaster,
+  PCFSoftShadowMap,
+  sRGBEncoding,
   Vector2,
   IcosahedronBufferGeometry,
 } from "../third_party/three.module.js";
@@ -22,16 +24,22 @@ import { XRControllerModelFactory } from "../third_party/XRControllerModelFactor
 import { XRHandModelFactory } from "../third_party/XRHandModelFactory.js";
 
 const av = document.querySelector("gum-av");
+const canvas = document.querySelector("canvas");
 const status = document.querySelector("#status");
 
 const renderer = new WebGLRenderer({
-  preserveDrawingBuffer: false,
   antialias: true,
+  alpha: true,
+  canvas,
+  preserveDrawingBuffer: false,
   powerPreference: "high-performance",
 });
 renderer.setPixelRatio(window.devicePixelRatio);
-renderer.setClearColor(0, 0);
+//renderer.setClearColor(0, 0);
 renderer.xr.enabled = true;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = PCFSoftShadowMap;
+renderer.outputEncoding = sRGBEncoding;
 
 document.body.append(renderer.domElement);
 
@@ -75,37 +83,31 @@ const palette = [
   "#BD3E30",
 ];
 
-const group = new TrailGroup(50, POINTS, 0.02);
+//const group = new TrailGroup(50, POINTS);
 const up = new Vector3(0, 1, 0);
+
+const fingerNames = [
+  "thumb",
+  "indexFinger",
+  "middleFinger",
+  "ringFinger",
+  "pinky",
+];
+
+const hands = 2;
+const trailsPerFinger = 1;
+
+for (let j = 0; j < fingerNames.length * hands * trailsPerFinger; j++) {
+  const trail = new Trail(POINTS, 10);
+  trails.push(trail);
+  scene.add(trail.mesh);
+}
 
 for (let trail of trails) {
   const ptr = ~~(Math.random() * palette.length);
   trail.ribbonMesh.material.color = new Color(palette[ptr]);
   scene.add(trail.ribbonMesh);
 }
-
-const fingers = [];
-
-if ("XRHand" in window) {
-  fingers.push(XRHand.THUMB_PHALANX_TIP);
-  fingers.push(XRHand.INDEX_PHALANX_TIP);
-  fingers.push(XRHand.MIDDLE_PHALANX_TIP);
-  fingers.push(XRHand.RING_PHALANX_TIP);
-  fingers.push(XRHand.LITTLE_PHALANX_TIP);
-}
-
-const hands = 2;
-const trailsPerFinger = 5;
-
-// for (let j = 0; j < fingers.length * hands * trailsPerFinger; j++) {
-//   const trail = new Trail();
-//   trails.push(trail);
-//   scene.add(trail.mesh);
-// }
-
-const trail = new Trail();
-trails.push(trail);
-scene.add(trail.mesh);
 
 function resize() {
   let w = window.innerWidth;
@@ -127,82 +129,84 @@ window.addEventListener("keydown", (e) => {
 
 let width = 0;
 let height = 0;
+let flipCamera = true;
 
 async function render() {
-  renderer.setAnimationLoop(render);
+  // Flip video element horizontally if necessary.
+  av.video.style.transform = flipCamera ? "scaleX(-1)" : "scaleX(1)";
 
-  const dir = new Vector3();
-  for (let j = 0; j < fingers.length; j++) {
-    const pos = hand1.joints[fingers[j]].position;
-    const pos2 = hand2.joints[fingers[j]].position;
-    const nextJoinPos = hand1.joints[fingers[j] - 1].position;
-    const nextJoinPos2 = hand2.joints[fingers[j] - 1].position;
-    const n = pos.clone().sub(nextJoinPos).normalize();
-    const n2 = pos2.clone().sub(nextJoinPos2).normalize();
+  if (width !== av.video.videoWidth || height !== av.video.videoHeight) {
+    const w = av.video.videoWidth;
+    const h = av.video.videoHeight;
+    orthoCamera.left = -0.5 * w;
+    orthoCamera.right = 0.5 * w;
+    orthoCamera.top = 0.5 * h;
+    orthoCamera.bottom = -0.5 * h;
+    orthoCamera.updateProjectionMatrix();
+    width = w;
+    height = h;
+  }
 
-    for (let i = 0; i < trailsPerFinger; i++) {
-      const pts = trails[j + i * 10].points;
-      // if (pts.length) {
-      //   dir.copy(pts[0].position).sub(pts[1].position).normalize();
-      //   n.crossVectors(dir, up).normalize();
-      //   n.cross(dir);
-      // }
-      trails[j + i * 10].update(pos, n);
-      // const pts2 = trails[j + 5 + i * 10].points;
-      // if (pts2.length) {
-      //   dir.copy(pts2[0].position).sub(pts2[1].position).normalize();
-      //   n2.crossVectors(dir, up).normalize();
-      //   n2.cross(dir);
-      // }
-      trails[j + 5 + i * 10].update(pos2, n2);
-    }
-  }
-  raycaster.setFromCamera(mouse, camera);
-  const intersects = raycaster.intersectObject(mesh);
-  if (intersects.length) {
-    const p = intersects[0];
-    const n = p.face.normal;
-    group.update(p.point, n);
-  }
   if (playing) {
     for (const trail of trails) {
       trail.step();
       trail.render();
     }
   }
-  renderer.render(scene, camera);
+  renderer.render(scene, orthoCamera);
+  renderer.setAnimationLoop(render);
 }
 
-const controller1 = renderer.xr.getController(0);
-scene.add(controller1);
+async function estimate() {
+  const predictions = await model.estimateHands(av.video);
 
-const controller2 = renderer.xr.getController(1);
-scene.add(controller2);
+  av.style.opacity = 1;
+  status.textContent = "";
 
-const controllerModelFactory = new XRControllerModelFactory();
-const handModelFactory = new XRHandModelFactory().setPath("./assets/");
-
-// Hand 1
-const controllerGrip1 = renderer.xr.getControllerGrip(0);
-controllerGrip1.add(
-  controllerModelFactory.createControllerModel(controllerGrip1)
-);
-scene.add(controllerGrip1);
-
-const hand1 = renderer.xr.getHand(0);
-hand1.add(handModelFactory.createHandModel(hand1, "oculus"));
-scene.add(hand1);
-
-// Hand 2
-const controllerGrip2 = renderer.xr.getControllerGrip(1);
-controllerGrip2.add(
-  controllerModelFactory.createControllerModel(controllerGrip2)
-);
-scene.add(controllerGrip2);
-
-const hand2 = renderer.xr.getHand(1);
-hand2.add(handModelFactory.createHandModel(hand2, "oculus"));
-scene.add(hand2);
+  if (predictions.length) {
+    console.log(predictions);
+    let ptr = 0;
+    for (let j = 0; j < fingerNames.length; j++) {
+      const joint = predictions[0].annotations[fingerNames[j]][3];
+      const jointN = predictions[0].annotations[fingerNames[j]][2];
+      const x = -1 * (joint[0] - 0.5 * width);
+      const y = height - joint[1] - 0.5 * height;
+      const z = joint[2];
+      const xn = -1 * (jointN[0] - 0.5 * width);
+      const yn = height - jointN[1] - 0.5 * height;
+      const zn = jointN[2];
+      const v = new Vector3(x, y, z);
+      const n = v.clone();
+      n.x -= xn;
+      n.y -= yn;
+      n.z -= zn;
+      n.normalize();
+      trails[ptr].update(v, n);
+      ptr++;
+    }
+    if (predictions.length > 1) {
+      for (let j = 0; j < fingerNames.length; j++) {
+        const joint = predictions[1].annotations[fingerNames[j]][3];
+        const jointN = predictions[1].annotations[fingerNames[j]][2];
+        const x = joint[0] - 0.5 * width;
+        const y = height - joint[1] - 0.5 * height;
+        const z = joint[2];
+        const xn = jointN[0] - 0.5 * width;
+        const yn = height - jointN[1] - 0.5 * height;
+        const zn = jointN[2];
+        const v = new Vector3(x, y, z);
+        const n = v.clone();
+        n.x -= xn;
+        n.y -= yn;
+        n.z -= zn;
+        n.normalize();
+        trails[ptr].update(v, n);
+        ptr++;
+      }
+    }
+  }
+  requestAnimationFrame(estimate);
+}
 
 const light = new DirectionalLight(0xffffff);
 light.position.set(0, 6, 0);
@@ -218,14 +222,15 @@ scene.add(light);
 const hemiLight = new HemisphereLight(0xffffbb, 0x080820, 1);
 scene.add(hemiLight);
 
-renderer.shadowMap.enabled = true;
+let model;
 
 async function init() {
-  //await Promise.all([tf.setBackend("webgl"), av.ready()]);
-  //status.textContent = "Loading model...";
-  //model = await handpose.load();
+  await Promise.all([tf.setBackend("webgl"), av.ready()]);
+  status.textContent = "Loading model...";
+  model = await handpose.load();
   document.body.appendChild(VRButton.createButton(renderer));
   render();
+  estimate();
 }
 
 window.addEventListener("resize", resize);

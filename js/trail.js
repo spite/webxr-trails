@@ -32,7 +32,8 @@ class Point {
 }
 
 class Trail {
-  constructor(numPoints) {
+  constructor(numPoints, width) {
+    this.width = width;
     this.numPoints = numPoints;
     this.spring = Maf.randomInRange(0.4, 0.5); //  0.45
     this.dampening = Maf.randomInRange(0.2, 0.25); // .25
@@ -125,7 +126,7 @@ class Trail {
     this.geometry.attributes.position.needsUpdate = true;
 
     const vertices = this.ribbonGeometry.attributes.position.array;
-    const w = 0.02;
+    const w = this.width;
     const n = new Vector3();
     const t = new Vector3();
     for (let j = 0; j < this.points.length; j++) {
@@ -146,10 +147,10 @@ class Trail {
 }
 
 class TrailGroup {
-  constructor(num, numPoints) {
+  constructor(num, numPoints, width) {
     this.trails = [];
     for (let j = 0; j < num; j++) {
-      const trail = new Trail(numPoints);
+      const trail = new Trail(numPoints, width);
       this.trails.push(trail);
       trails.push(trail);
     }
