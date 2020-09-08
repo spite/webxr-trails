@@ -109,15 +109,25 @@ for (let trail of trails) {
   scene.add(trail.ribbonMesh);
 }
 
-function resize() {
-  let w = window.innerWidth;
-  let h = window.innerHeight;
-  renderer.setSize(w, h);
-  renderer.domElement.style.width = "100%";
-  renderer.domElement.style.height = "100%";
+let width = 0;
+let height = 0;
+let flipCamera = true;
 
-  camera.aspect = w / h;
-  camera.updateProjectionMatrix();
+function resize() {
+  const videoAspectRatio = width / height;
+  const windowWidth = window.innerWidth;
+  const windowHeight = window.innerHeight;
+  const windowAspectRatio = windowWidth / windowHeight;
+  let adjustedWidth;
+  let adjustedHeight;
+  if (videoAspectRatio > windowAspectRatio) {
+    adjustedWidth = windowWidth;
+    adjustedHeight = windowWidth / videoAspectRatio;
+  } else {
+    adjustedWidth = windowHeight * videoAspectRatio;
+    adjustedHeight = windowHeight;
+  }
+  renderer.setSize(adjustedWidth, adjustedHeight);
 }
 
 let playing = true;
@@ -126,10 +136,6 @@ window.addEventListener("keydown", (e) => {
     playing = !playing;
   }
 });
-
-let width = 0;
-let height = 0;
-let flipCamera = true;
 
 async function render() {
   // Flip video element horizontally if necessary.
@@ -145,6 +151,7 @@ async function render() {
     orthoCamera.updateProjectionMatrix();
     width = w;
     height = h;
+    resize();
   }
 
   if (playing) {
@@ -164,7 +171,6 @@ async function estimate() {
   status.textContent = "";
 
   if (predictions.length) {
-    console.log(predictions);
     let ptr = 0;
     for (let j = 0; j < fingerNames.length; j++) {
       const joint = predictions[0].annotations[fingerNames[j]][3];
